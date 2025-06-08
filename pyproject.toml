@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "prune_point_identifier"
+version = "0.0.1"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Marcus Rosette", email = "rosettem@oregonstate.edu" },
+]
+maintainers = [
+    { name = "Marcus Rosette", email = "rosettem@oregonstate.edu" },
+]
+description = "Compares pre- and post-pruning 3D point clouds of tree scans to detect and localize prune points along branches."
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "open3d",
+    "trimesh",
+    "pyyaml",
+    "scikit-image",
+    "scipy",
+    "tqdm",
+    "skan",
+]
