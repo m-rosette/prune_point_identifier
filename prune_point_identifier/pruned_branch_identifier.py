@@ -79,7 +79,7 @@ class PrunedBranchIdentifier:
 
         # Load mesh and point cloud
         self.load_mesh()
-        self.load_point_cloud(filter_z=True)
+        self.load_point_cloud()
 
     def load_mesh(self):
         # Load your triangle mesh
@@ -87,13 +87,12 @@ class PrunedBranchIdentifier:
         self.mesh.compute_vertex_normals()
         self.mesh.paint_uniform_color(self.mesh_color)
     
-    def load_point_cloud(self, filter_z=True):
+    def load_point_cloud(self):
         """
         Loads a point cloud from the file specified by self.point_cloud_path and optionally filters it by the Z axis.
 
         Args:
-            filter_z (bool, optional): If True, filters the loaded point cloud to include only points with Z values
-                greater than or equal to self.z_min. Defaults to True.
+            None
 
         Notes:
             - Sets self.pcd to the loaded (and possibly filtered) point cloud.
@@ -101,51 +100,7 @@ class PrunedBranchIdentifier:
 
         """
         self.pcd = o3d.io.read_point_cloud(self.point_cloud_path) 
-        if filter_z:
-            self.pcd = self.filter_by_axis(self.pcd, z_min=self.z_min)
         self.pcd.paint_uniform_color(self.point_color)
-
-    def filter_by_axis(self,
-                        pcd,
-                        x_min=None, x_max=None,
-                        y_min=None, y_max=None,
-                        z_min=None, z_max=None
-                    ):
-        """
-        Filters a point cloud by specified axis-aligned bounding box limits.
-
-        Parameters:
-            pcd (o3d.geometry.PointCloud): The input point cloud to filter.
-            x_min (float, optional): Minimum x-value to include. Points with x < x_min are excluded.
-            x_max (float, optional): Maximum x-value to include. Points with x > x_max are excluded.
-            y_min (float, optional): Minimum y-value to include. Points with y < y_min are excluded.
-            y_max (float, optional): Maximum y-value to include. Points with y > y_max are excluded.
-            z_min (float, optional): Minimum z-value to include. Points with z < z_min are excluded.
-            z_max (float, optional): Maximum z-value to include. Points with z > z_max are excluded.
-
-        Returns:
-            o3d.geometry.PointCloud: A new point cloud containing only the points within the specified bounds.
-        """
-        points = np.asarray(pcd.points)
-        mask = np.ones(points.shape[0], dtype=bool)
-        if x_min is not None:
-            mask &= points[:, 0] >= x_min
-        if x_max is not None:
-            mask &= points[:, 0] <= x_max
-        if y_min is not None:
-            mask &= points[:, 1] >= y_min
-        if y_max is not None:
-            mask &= points[:, 1] <= y_max
-        if z_min is not None:
-            mask &= points[:, 2] >= z_min
-        if z_max is not None:
-            mask &= points[:, 2] <= z_max
-        filtered_pcd = o3d.geometry.PointCloud()
-        filtered_pcd.points = o3d.utility.Vector3dVector(points[mask])
-        if pcd.has_colors():
-            colors = np.asarray(pcd.colors)
-            filtered_pcd.colors = o3d.utility.Vector3dVector(colors[mask])
-        return filtered_pcd
     
     def raycast_pts_to_mesh(self):
         """
@@ -323,21 +278,23 @@ class PrunedBranchIdentifier:
 
 if __name__ == "__main__":
     # 1) Specify input file paths
-    mesh_file = "results/tests/after_mesh.ply"
-    pcd_file = "data/labeled_pt_clouds/preprune/2025-01-23-094626-ply-3dgs-ArtificialObjectRemoval.ply"
+    # mesh_file = "results/tests/after_mesh.ply"
+    # pcd_file = "data/labeled_pt_clouds/preprune/2025-01-23-094626-ply-3dgs-ArtificialObjectRemoval.ply"
+    mesh_file = "/home/marcus/IMML/prune_point_identifier/results/tests/after_mesh_transformed.ply"
+    pcd_file = "/home/marcus/IMML/prune_point_identifier/data/labeled_pt_clouds/preprune/before_pcd_transformed.ply"
+
 
 
     # 2) Instantiate the pruner with desired thresholds
     pruner = PrunedBranchIdentifier(
         mesh_path=mesh_file,
         point_cloud_path=pcd_file,
-        z_min=0.03,
-        prune_point_dist_threshold=0.04,
+        prune_point_dist_threshold=0.035,
         outlier_nb_neighbors=25,
         outlier_std_ratio=2.0,
         dbscan_eps=0.04,
         dbscan_min_points=20,
-        save_directory_prefix="results/pruned_branches/branch"
+        save_directory_prefix="results/pruned_branches_new/branch"
     )
     
-    pruner.main(vis=True, save_branches=True)
+    pruner.main(vis=True, save_branches=False)

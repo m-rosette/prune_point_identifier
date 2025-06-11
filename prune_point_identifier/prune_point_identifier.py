@@ -58,7 +58,8 @@ class PrunePointIdentifier:
     def __init__(self, 
                  branch_num, 
                  mesh_path=None,
-                 parent_pcd_dir=None, 
+                 parent_pcd_dir=None,
+                 before_pcd_path=None, 
                  pcd_dir=None, 
                  voxel_size=0.007, 
                  smoothness=0.03,
@@ -69,7 +70,7 @@ class PrunePointIdentifier:
         self.branch_num = branch_num
         self.voxel_size = voxel_size
         self.smoothness = smoothness
-        self.before_pcd_path = 'data/labeled_pt_clouds/preprune/2025-01-23-094626-ply-3dgs-ArtificialObjectRemoval.ply'
+        self.before_pcd_path = before_pcd_path or 'data/labeled_pt_clouds/preprune/2025-01-23-094626-ply-3dgs-ArtificialObjectRemoval.ply'
         self.mesh_path = mesh_path or "results/after_mesh.ply"
         self.parent_pcd_dir = parent_pcd_dir or 'results/pruned_branches'
         self.pcd_dir = pcd_dir or f'{self.parent_pcd_dir}/branch_{branch_num}/'
@@ -230,7 +231,7 @@ class PrunePointIdentifier:
             ValueError: If topology extraction repeatedly fails even after reducing `graph_k_n`.
         """
         if len(self.pcd.points) < 30:
-            self.pcd = self.jitter_upsample(self.pcd, factor=2, noise_scale=0.001)
+            self.pcd = self.jitter_upsample(self.pcd, factor=3, noise_scale=0.001)
 
         lbc = LBC(point_cloud=self.pcd)
 
@@ -1008,12 +1009,15 @@ class PrunePointIdentifier:
 
 if __name__ == "__main__":
     branch_fit = PrunePointIdentifier(
-        branch_num=33,
+        branch_num=8,
         voxel_size=0.008,
         smoothness=0.03,
         cone_angle_deg=30,
         n_rings=10,
-        n_per_ring=20)
+        n_per_ring=20,
+        parent_pcd_dir="results/pruned_branches_new",
+        before_pcd_path='/home/marcus/IMML/prune_point_identifier/data/labeled_pt_clouds/preprune/before_pcd_transformed.ply',
+        mesh_path='results/tests/after_mesh_transformed.ply')
 
     # branch_fit.run_single_evaluation(visualize_prune_point=False, 
     #                                  visualize_rays=True, 
@@ -1021,8 +1025,8 @@ if __name__ == "__main__":
     #                                  save_yaml=False)
     # branch_fit.run_all_evaluations()
 
-    # branch_fit.run_single_evalutation_pc_skeletor(visualize_prune_point=False, 
-    #                                                 visualize_rays=True, 
-    #                                                 visualize_spline=True, 
-    #                                                 save_yaml=False)
-    branch_fit.run_all_evaluations_pc_skeletor()
+    branch_fit.run_single_evalutation_pc_skeletor(visualize_prune_point=False, 
+                                                    visualize_rays=True, 
+                                                    visualize_spline=True, 
+                                                    save_yaml=False)
+    # branch_fit.run_all_evaluations_pc_skeletor()

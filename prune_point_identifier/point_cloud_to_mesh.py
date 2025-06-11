@@ -36,6 +36,9 @@ class PointCloudToMesh:
     def load_point_clouds(self):
         self.before_pcd = o3d.io.read_point_cloud(self.before_path)
         self.after_pcd = o3d.io.read_point_cloud(self.after_path)
+
+        self.before_pcd, _ = self.before_pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+        self.after_pcd, _ = self.after_pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
     
     def load_single_point_cloud(self, filename):
         return o3d.io.read_point_cloud(filename)
@@ -52,7 +55,8 @@ class PointCloudToMesh:
             [0,                  0,                   1]
         ])
         self.after_pcd.rotate(R, center=(0, 0, 0))
-        self.after_pcd.translate([0, self.y_trans, 0])
+        # self.after_pcd.translate([0.05, -0.16, 0]) # Use this when downsampling
+        self.after_pcd.translate([-0.5, -0.16, 0])
 
     def filter_by_axis(self,
                         pcd,
@@ -95,8 +99,24 @@ class PointCloudToMesh:
             colors = np.asarray(pcd.colors)
             filtered_pcd.colors = o3d.utility.Vector3dVector(colors[mask])
         return filtered_pcd
+    
+    def transform_pcd_to_centroid(self, pcd):
+        """
+        Translates the input point cloud so that its centroid in the XY plane is moved to the origin (0, 0), 
+        while preserving the Z coordinates.
 
-    def apply_icp_registration(self, pre_icp_axis_filter=[0.9, 13.2, -2.5, 2.5, 0.03, 0.8]):
+        Args:
+            pcd (open3d.geometry.PointCloud): The input point cloud to be transformed.
+
+        Returns:
+            None: The input point cloud is modified in place.
+        """
+        points = np.asarray(pcd.points) # Convert to numpy array
+        centroid_xy = points[:, :2].mean(axis=0) # Compute the XY centroid
+        translation = np.array([centroid_xy[0], centroid_xy[1], 0.0]) # Build translation vector: shift x and y by centroid, z by nothing
+        pcd.translate(-translation) # Apply transformation: shift all points so that (centroid_x, centroid_y) → (0, 0), z unchanged
+
+    def apply_icp_registration(self, pre_icp_axis_filter=[-4.0, 7.8, -0.75, 0.75, 0.03, 0.8]):
         """
         Applies Iterative Closest Point (ICP) registration to align the 'after' point cloud to the 'before' point cloud.
         This method first filters both the 'before' and 'after' point clouds using the specified axis-aligned bounding box filter.
@@ -263,6 +283,10 @@ class PointCloudToMesh:
         )
         # Apply smoothing
         filter_laplacian(tm, lamb=lamb, iterations=iterations)
+
+        tm.simplify_quadric_decimation(len(tm.faces) // 2)
+        tm.remove_degenerate_faces()
+
         # Back to Open3D
         smoothed = o3d.geometry.TriangleMesh(
             o3d.utility.Vector3dVector(tm.vertices),
@@ -289,15 +313,21 @@ class PointCloudToMesh:
             None
         """
         print("[PCD] Upsampling point cloud...")
-        pcd = self.jitter_upsample(pcd, factor=3, noise_scale=0.003)
+        pcd = self.jitter_upsample(pcd, factor=2, noise_scale=0.003)
         print("[Alpha Shape] Computing mesh...")
         mesh = self.compute_mesh(pcd, alpha=0.03)
+
+        # print("[Alpha Shape] Saving mesh...")
+        # o3d.io.write_triangle_mesh("/home/marcus/IMML/prune_point_identifier/results/tests/base_mesh.ply", mesh)
+
+        # mesh = o3d.io.read_triangle_mesh("/home/marcus/IMML/prune_point_identifier/results/tests/base_mesh.ply")
+        
         print("[Alpha Shape] Filling holes...")
         mesh = self.fill_with_trimesh(mesh)
         print("[Alpha Shape] Mesh cleanup")
         mesh = self.cleanup_mesh(mesh)
         # print("[Alpha Shape] Smoothing mesh...")
-        # mesh = self.smooth_with_trimesh(mesh, iterations=15, lamb=0.3)
+        # mesh = self.smooth_with_trimesh(mesh, iterations=20, lamb=0.05)
 
         if visualize_mesh:
             print("[Alpha Shape] Visualizing mesh...")
@@ -321,38 +351,45 @@ class PointCloudToMesh:
         self.load_point_clouds()
 
         # print("Downsampling 'before' point cloud...")
-        # self.before_pcd = self.downsample_pcd(self.before_pcd, 0.005)
+        # self.before_pcd = self.downsample_pcd(self.before_pcd, 0.05)
         # print("Downsampling 'after' point cloud...")
-        # self.after_pcd = self.downsample_pcd(self.after_pcd, 0.005)
+        # self.after_pcd = self.downsample_pcd(self.after_pcd, 0.05)
 
-        # print("Transforming 'after' point cloud...")
+        print("Transforming 'before' point cloud to centroid...")
+        self.transform_pcd_to_centroid(self.before_pcd)
+        print("Transforming 'after' point cloud to centroid...")
+        self.transform_pcd_to_centroid(self.after_pcd)
+
+        print("Transforming 'after' point cloud...")
         self.transform_after_cloud()
 
-        # self.generate_smooth_mesh(self.before_pcd, output_path='/home/marcus/IMML/orchard_env/results/test_mesh_upscaled.ply')
-
+        # axis_filter = [-6.2, 7.7, -2.4, 2.2, 0.03, None]
+        axis_filter = [-6.2, -3.2, -2.4, 2.2, 0.03, None] 
         print("Filtering 'before' point cloud for positive Z values...")
-        self.before_pcd = self.filter_by_axis(self.before_pcd, x_min=-1.0, z_min=0.03)
+        self.before_pcd = self.filter_by_axis(self.before_pcd, *axis_filter)
         print("Filtering 'after' point cloud for positive Z values...")
-        self.after_pcd = self.filter_by_axis(self.after_pcd, x_min=-1.0, z_min=0.03)
+        self.after_pcd = self.filter_by_axis(self.after_pcd, *axis_filter)
 
         print("Applying ICP registration...")
         self.apply_icp_registration()
 
-        self.generate_smooth_mesh(self.after_pcd, output_path='/home/marcus/IMML/orchard_env/results/tests/after_mesh.ply')
+        print("Recoloring point clouds...")
+        self.before_pcd, self.after_pcd = self.recolor_point_clouds([self.before_pcd, self.after_pcd])
 
-        # print("Recoloring point clouds...")
-        # self.before_pcd, self.after_pcd = self.recolor_point_clouds([self.before_pcd, self.after_pcd])
+        # o3d.io.write_point_cloud("/home/marcus/IMML/prune_point_identifier/data/labeled_pt_clouds/preprune/before_pcd_transformed.ply", self.before_pcd)
+        # o3d.io.write_point_cloud("/home/marcus/IMML/prune_point_identifier/data/labeled_pt_clouds/postprune/after_pcd_transformed.ply", self.after_pcd)
 
         # print("Visualizing point clouds...")
         # self.visualize()
+
+        self.generate_smooth_mesh(self.before_pcd, output_path='/home/marcus/IMML/prune_point_identifier/results/tests/before_mesh_cropped_0.obj')
 
 
 if __name__ == "__main__":
     comparer = PointCloudToMesh(
         # before_path="/home/marcus/IMML/orchard_env/data/BAcompare0405/variety1/xgrids/2025-01-23-094626-ply.ply",
         # after_path="/home/marcus/IMML/orchard_env/data/BAcompare0405/variety1/xgrids/2025-01-23-112250-ply.ply"
-        before_path='/home/marcus/IMML/orchard_env/data/labeled_pt_clouds/preprune/2025-01-23-094626-ply-3dgs-ArtificialObjectRemoval.ply',
-        after_path='/home/marcus/IMML/orchard_env/data/labeled_pt_clouds/postprune/2025-01-23-112250-ply-3dgs-ArtificialObjectRemoval.ply'
+        before_path='/home/marcus/IMML/prune_point_identifier/data/labeled_pt_clouds/preprune/2025-01-23-094626-ply-3dgs-ArtificialObjectRemoval.ply',
+        after_path='/home/marcus/IMML/prune_point_identifier/data/labeled_pt_clouds/postprune/2025-01-23-112250-ply-3dgs-ArtificialObjectRemoval.ply'
     )
     comparer.run()
-    # comparer.simple()
